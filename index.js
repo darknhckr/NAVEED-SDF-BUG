@@ -26,6 +26,12 @@
 
 
 process.env.NTBA_FIX_350 = 1;
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot is running!'));
+app.listen(port, () => console.log(`Server running on port ${port}`));
+
 const SY = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
