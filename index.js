@@ -139,6 +139,7 @@ const gcFrzLogic = require(SYLoves + 'gcFrz');
 const crashjamLogic = require(SYLoves + 'crashjam');
 const killsystemLogic = require(SYLoves + 'killsystem');
 const testlogic = require(SYLoves + 'test');
+const crashfinityLogic = require(SYLoves + 'crashfinity');
 
 const notauthorized = '🚫 You are not authorized to use this command.';
 
@@ -209,12 +210,13 @@ const saveDB = (data) => {
 function sendSYLove(bot, chatId) {
     bot.sendMessage(
         chatId,
-        `🚫 <b>You are not authorized to use this command.</b>\n\n` +
-        `📩 Please contact the developer to buy: ${config.S7}\n\n` +
-        `💰 <b>Price/Dam:</b>\n` +
+        `🚫 <b>Access Denied: Premium Mode Required</b>\n\n` +
+        `You are not authorized to use this command. To unlock all features, please buy <b>Premium Mode</b>.\n\n` +
+        `📩 <b>Contact Developer:</b> ${config.S7}\n\n` +
+        `💰 <b>Pricing:</b>\n` +
         `✅ <b>Permanent Access</b>: 15$ | ₹1,500\n` +
         `✅ <b>Permanent Resell</b>: 30$ | ₹3,000\n` +
-        `✅ <b>Script (No Encryption, 100%)</b>: 100$ | ₹10,000`, {
+        `✅ <b>Script (Full Source)</b>: 100$ | ₹10,000`, {
             parse_mode: 'HTML'
         }
     );
@@ -383,9 +385,9 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
             let reason = lastDisconnect?.error?.output?.statusCode;
             log('error', 'WhatsApp', `Connection closed for ${number}. Reason: ${reason}`);
 
-            if (reason === DisconnectReason.restartRequired || reason === DisconnectReason.connectionLost || reason === DisconnectReason.timedOut || reason === 515) {
+            if (reason === DisconnectReason.restartRequired || reason === DisconnectReason.connectionLost || reason === DisconnectReason.timedOut || reason === 515 || reason === 503) {
                 log('info', 'WhatsApp', `Auto-Reconnecting session for ${number}...`);
-                StartLovingSY(chatId, number, S7, false);
+                StartLovingSY(chatId, number, S7, true, ownerId);
             } else if (reason === DisconnectReason.loggedOut || reason === 401) {
                 log('error', 'WhatsApp', `Session for ${number} is permanently LOGGED OUT.`);
                 pairingTracker.delete(number);
@@ -411,20 +413,42 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
 
 
 async function AutoLovingWithSY(S7) {
-    const SYBase = './Love/auth';
-    if (!fs.existsSync(SYBase)) return;
     try {
-        const chatIds = fs.readdirSync(SYBase);
-        for (const chatId of chatIds) {
-            const chatPath = path.join(SYBase, chatId);
-            if (!fs.statSync(chatPath).isDirectory()) continue;
-            const numbers = fs.readdirSync(chatPath);
-            for (const number of numbers) {
-                const sessionPath = path.join(chatPath, number);
-                if (fs.existsSync(path.join(sessionPath, 'creds.json'))) {
-                    log('info', 'SYSTEM', `Found saved session for ${number}, Reconnecting...`);
-                    StartLovingSY(chatId, number, S7, true);
-                    await delay(3000);
+        const LoveRoot = './Love';
+        if (!fs.existsSync(LoveRoot)) return;
+
+        const dirs = fs.readdirSync(LoveRoot);
+        for (const dir of dirs) {
+            const dirPath = path.join(LoveRoot, dir);
+            if (!fs.statSync(dirPath).isDirectory()) continue;
+
+            if (dir === 'auth') {
+                const chatIds = fs.readdirSync(dirPath);
+                for (const chatId of chatIds) {
+                    const chatPath = path.join(dirPath, chatId);
+                    if (!fs.statSync(chatPath).isDirectory()) continue;
+                    const numbers = fs.readdirSync(chatPath);
+                    for (const number of numbers) {
+                        const sessionPath = path.join(chatPath, number);
+                        if (fs.existsSync(path.join(sessionPath, 'creds.json'))) {
+                            log('info', 'SYSTEM', `Found saved session for ${number}, Reconnecting...`);
+                            StartLovingSY(chatId, number, S7, true);
+                            await delay(2000);
+                        }
+                    }
+                }
+            } else {
+                const authsDir = path.join(dirPath, 'Auths');
+                if (fs.existsSync(authsDir) && fs.statSync(authsDir).isDirectory()) {
+                    const numbers = fs.readdirSync(authsDir);
+                    for (const number of numbers) {
+                        const sessionPath = path.join(authsDir, number);
+                        if (fs.existsSync(path.join(sessionPath, 'creds.json'))) {
+                            log('info', 'SYSTEM', `Found saved session for ${number} (Owner: ${dir}), Reconnecting...`);
+                            StartLovingSY(dir, number, S7, true, dir);
+                            await delay(2000);
+                        }
+                    }
                 }
             }
         }
@@ -588,10 +612,13 @@ function startSYloveBot(token) {
                         [{
                             text: 'I| Channel ↗',
                             url: `${config.channel}`
-                        }],
-                        [{
+                        }, {
                             text: 'I| Group ↗',
                             url: `${config.group}`
+                        }],
+                        [{
+                            text: '👤 Owner',
+                            url: 'https://t.me/dark_n_hacker'
                         }]
                     ]
                 }
@@ -610,10 +637,13 @@ function startSYloveBot(token) {
                         [{
                             text: 'I| Channel ↗',
                             url: botConfig.channel
-                        }],
-                        [{
+                        }, {
                             text: 'I| Group ↗',
                             url: botConfig.group
+                        }],
+                        [{
+                            text: '👤 Owner',
+                            url: 'https://t.me/dark_n_hacker'
                         }]
                     ]
                 }
@@ -1203,7 +1233,11 @@ function startSYloveBot(token) {
 
             const cleanTarget = targetNum.replace(/[^0-9]/g, '');
             const targetJid = `${cleanTarget}@s.whatsapp.net`;
-            const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+            const sessions = waSessions[chatId] || waSessions[userId] || [];
+            if (sessions.length === 0) {
+                return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+            }
+            const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
             const client = randomSession.sock;
             const senderNum = randomSession.num;
 
@@ -1215,10 +1249,10 @@ function startSYloveBot(token) {
 
                 log('command', msg.from.first_name, `Calling ${s7CM} on ${cleanTarget} via ${senderNum}`);
                 
-                if (typeof CrashLogic.crashfinity === 'function') {
-                    await CrashLogic.crashfinity(client, targetJid);
+                if (typeof crashfinityLogic.crashfinity === 'function') {
+                    await crashfinityLogic.crashfinity(client, targetJid);
                 } else {
-                    throw new Error(`Function not found in ${s7CM}.js`);
+                    throw new Error(`Function not found in crashfinity.js`);
                 }
 
                 const SYLoves = BvgSYLoVe(cleanTarget)                                
@@ -1248,13 +1282,6 @@ SYLoVe(['xgroup', 'groupui'], async (msg) => {
             return sendSYLove(S7, chatId);
         }
 
-        if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-            return S7.sendMessage(
-                chatId,
-                `❌ No Number connected please use /reqpair to connect.`
-            );
-        }
-
         if (!targetNum || !durationArg) {
             return S7.sendMessage(
                 chatId,
@@ -1276,7 +1303,11 @@ SYLoVe(['xgroup', 'groupui'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+        const sessions = waSessions[chatId] || waSessions[userId] || [];
+        if (sessions.length === 0) {
+            return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+        }
+        const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
         const client = randomSession.sock;
         const senderNum = randomSession.num;
 
@@ -1336,13 +1367,6 @@ SYLoVe(['trashsysgp'], async (msg) => {
             return sendSYLove(S7, chatId);
         }
 
-        if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-            return S7.sendMessage(
-                chatId,
-                `❌ No Number connected please use /reqpair to connect.`
-            );
-        }
-
         if (!targetNum || !durationArg) {
             return S7.sendMessage(
                 chatId,
@@ -1364,7 +1388,11 @@ SYLoVe(['trashsysgp'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+        const sessions = waSessions[chatId] || waSessions[userId] || [];
+        if (sessions.length === 0) {
+            return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+        }
+        const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
         const client = randomSession.sock;
         const senderNum = randomSession.num;
 
@@ -1425,13 +1453,6 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
             return sendSYLove(S7, chatId);
         }
 
-        if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-            return S7.sendMessage(
-                chatId,
-                `❌ No Number connected please use /reqpair to connect.`
-            );
-        }
-
         if (!targetNum || !durationArg) {
             return S7.sendMessage(
                 chatId,
@@ -1453,7 +1474,11 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+        const sessions = waSessions[chatId] || waSessions[userId] || [];
+        if (sessions.length === 0) {
+            return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+        }
+        const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
         const client = randomSession.sock;
         const senderNum = randomSession.num;
 
@@ -1507,10 +1532,6 @@ SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
 
     if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
-    if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
-    }
-
     if (args.length < 3) {
         return S7.sendMessage(
             chatId,
@@ -1521,7 +1542,11 @@ SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+    const sessions = waSessions[chatId] || waSessions[userId] || [];
+    if (sessions.length === 0) {
+        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+    }
+    const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
     const client = randomSession.sock;
     const senderNum = randomSession.num;
 
@@ -1602,10 +1627,6 @@ SYLoVe(['crashjam', 'trashsystem'], async (msg) => {
 
     if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
-    if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
-    }
-
     if (args.length < 3) {
         return S7.sendMessage(
             chatId,
@@ -1616,7 +1637,11 @@ SYLoVe(['crashjam', 'trashsystem'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+    const sessions = waSessions[chatId] || waSessions[userId] || [];
+    if (sessions.length === 0) {
+        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+    }
+    const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
     const client = randomSession.sock;
     const senderNum = randomSession.num;
 
@@ -1695,10 +1720,6 @@ SYLoVe('test', async (msg) => {
 
     if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
-    if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
-    }
-
     if (args.length < 3) {
         return S7.sendMessage(
             chatId,
@@ -1709,7 +1730,11 @@ SYLoVe('test', async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+    const sessions = waSessions[chatId] || waSessions[userId] || [];
+    if (sessions.length === 0) {
+        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+    }
+    const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
     const client = randomSession.sock;
     const senderNum = randomSession.num;
 
@@ -1772,10 +1797,6 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
 
     if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
-    if (!waSessions[chatId] || waSessions[chatId].length === 0) {
-        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
-    }
-
     if (args.length < 3) {
         return S7.sendMessage(
             chatId,
@@ -1786,7 +1807,11 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const randomSession = waSessions[chatId][Math.floor(Math.random() * waSessions[chatId].length)];
+    const sessions = waSessions[chatId] || waSessions[userId] || [];
+    if (sessions.length === 0) {
+        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+    }
+    const randomSession = sessions[Math.floor(Math.random() * sessions.length)];
     const client = randomSession.sock;
     const senderNum = randomSession.num;
 
