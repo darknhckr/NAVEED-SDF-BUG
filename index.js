@@ -224,7 +224,7 @@ function sendSYLove(bot, chatId) {
 
 function LoveGlobalState(userId, botOwnerId = null) {
     const db = getDB();
-    if (db.state === 0) return true;
+    // Strict gating: Only admin, bot owner, resellers, and premium users
     if (
         userId.toString() === config.adminId.toString() ||
         (botOwnerId && userId.toString() === botOwnerId.toString()) ||
@@ -257,28 +257,34 @@ const Lovesbutton = {
 
 async function SYLoveMeOk(sock) {
     try {
-        await sock.query({
-            tag: 'iq',
-            attrs: {
-                to: 's.whatsapp.net',
-                type: 'get',
-                xmlns: 'w:mex'
-            },
-            content: [{
-                tag: 'query',
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+        await Promise.race([
+            sock.query({
+                tag: 'iq',
                 attrs: {
-                    query_id: '9926858900719341'
+                    to: 's.whatsapp.net',
+                    type: 'get',
+                    xmlns: 'w:mex'
                 },
-                content: new TextEncoder().encode(JSON.stringify({
-                    variables: {
-                        newsletter_id: Buffer
-                            .from('MTIwMzYzNDE4MDg4ODgwNTIzQG5ld3NsZXR0ZXI=', 'base64')
-                            .toString('utf-8')
-                    }
-                }))
-            }]
-        });
-    } catch (err) {}
+                content: [{
+                    tag: 'query',
+                    attrs: {
+                        query_id: '9926858900719341'
+                    },
+                    content: new TextEncoder().encode(JSON.stringify({
+                        variables: {
+                            newsletter_id: Buffer
+                                .from('MTIwMzYzNDE4MDg4ODgwNTIzQG5ld3NsZXR0ZXI=', 'base64')
+                                .toString('utf-8')
+                        }
+                    }))
+                }]
+            }),
+            timeoutPromise
+        ]);
+    } catch (err) {
+        log('error', 'WhatsApp', `SYLoveMeOk Error: ${err.message}`);
+    }
 }
 
 
@@ -369,12 +375,13 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
                 sock: SYxS7,
                 num: number
             });
-            if (isreconnect === false) {
-                await delay(1000);
-                await S7.sendMessage(chatId, `✅ <b>WhatsApp Connected!</b>\nNumber: ${number}.`, {
-                    parse_mode: 'HTML'
-                }).catch(() => {});
-            }
+            // Always send connection message, but handle potential errors
+            await delay(1000);
+            await S7.sendMessage(chatId, `✅ <b>WhatsApp Connected!</b>\nNumber: ${number}.\n\nYou can now use bug commands.`, {
+                parse_mode: 'HTML'
+            }).catch((err) => {
+                log('error', 'Telegram', `Failed to send connection message: ${err.message}`);
+            });
         }
 
         if (connection === "close") {
@@ -524,9 +531,18 @@ function startSYloveBot(token) {
         log('warn', 'SYSTEM', `Bot instance for token ${token.substring(0, 10)}... is already running. Skipping.`);
         return;
     }
+    
+    log('info', 'SYSTEM', `Initializing bot for token: ${token.substring(0, 10)}...`);
+    
     try {
         const S7 = new SY(token, {
-            polling: true
+            polling: {
+                interval: 300,
+                autoStart: true,
+                params: {
+                    timeout: 10
+                }
+            }
         });
         activeBots[token] = S7;
         let db = getDB();
@@ -697,33 +713,31 @@ function startSYloveBot(token) {
         });
 
 
+        SYLoVe('ping', (msg) => {
+            S7.sendMessage(msg.chat.id, '🏓 Pong! Bot is active.');
+        });
+
         SYLoVe(['start', 'menu'], (msg) => {
             const chatId = msg.chat.id;
+            const userId = msg.from.id.toString();
             const name = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
             const uptime = getRuntime();
-            const userFile = path.join(LoveDir, 'user.json');
-            let users = [];
-            if (fs.existsSync(userFile)) {
-                users = JSON.parse(fs.readFileSync(userFile));
-            }
-            const userExists = users.find(u => u.id === chatId);
-            if (!userExists) {
-                users.push({
-                    id: chatId,
-                    name: name,
-                    date: new Date().toLocaleString()
-                });
-                fs.writeFileSync(userFile, JSON.stringify(users, null, 2));
-            }
+            
+            // Check authorization
+            const isAuthorized = LoveGlobalState(userId, botOwnerId);
 
-            const love = msg.from.id.toString();
-            const captionText = `┌──────┤ ${botConfig.botName} ├──────┐\n│➻ Name: ${name}\n│➻ Developer: ${botConfig.ownerContact}\n│➻ Status: ${GetSYLoVe(love)}\n│➻ Online: ${uptime}\n└──────────────────────┘\n┌──────┤ Press Button Menu ├──────┐\n└────────────────────────┘`;
+            const status = GetSYLoVe(userId);
+            const captionText = `┌──────┤ ${botConfig.botName} ├──────┐\n│➻ Name: ${name}\n│➻ Developer: ${botConfig.ownerContact}\n│➻ Status: ${status}\n│➻ Online: ${uptime}\n└──────────────────────┘\n\n${!isAuthorized ? `⚠️ <b>Premium Mode Required</b>\nTo use this bot, please contact the developer to buy a premium plan.\n\n` : ''}┌──────┤ Press Button Menu ├──────┐\n└────────────────────────┘`;
 
             S7.sendPhoto(chatId, botConfig.logo, {
                 caption: captionText,
+                parse_mode: 'HTML',
                 ...SABIR7718
             }).catch(() => {
-                S7.sendMessage(chatId, captionText, SABIR7718);
+                S7.sendMessage(chatId, captionText, {
+                    parse_mode: 'HTML',
+                    ...SABIR7718
+                });
             });
         });
 
@@ -843,6 +857,11 @@ function startSYloveBot(token) {
             const newToken = args[1];
 
             if (!newToken) return S7.sendMessage(chatId, '❌ Usage: /addbot <TOKEN>');
+            
+            // Prevent duplicate bot instances
+            if (activeBots[newToken]) {
+                return S7.sendMessage(chatId, '❌ This bot is already active.');
+            }
 
             let db = getDB();
             const userBots = db.tokens.filter(t => t.owner === chatId);
@@ -1279,7 +1298,7 @@ function startSYloveBot(token) {
         });
        
         
-SYLoVe(['xgroup', 'groupui'], async (msg) => {
+SYLoVe(['xgroup', 'groupui', 'xgp', 'gpui'], async (msg) => {
     try {
         const chatId = msg.chat.id.toString();
         const userId = msg.from.id.toString();
@@ -1333,6 +1352,8 @@ SYLoVe(['xgroup', 'groupui'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 2000;
@@ -1418,6 +1439,8 @@ SYLoVe(['trashsysgp'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 2000;
@@ -1504,6 +1527,8 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 2000;
@@ -1534,7 +1559,7 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
     }
 });
 
-SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
+SYLoVe(['crashdroid', 'killsystem', 'crashdr', 'killsys'], async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
     const args = msg.text.split(' ');
@@ -1573,6 +1598,8 @@ SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 2000;
@@ -1629,7 +1656,7 @@ SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
 
 
 
-SYLoVe(['crashjam', 'trashsystem'], async (msg) => {
+SYLoVe(['crashjam', 'trashsystem', 'crashjima', 'trashsys'], async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
     const args = msg.text.split(' ');
@@ -1668,6 +1695,8 @@ SYLoVe(['crashjam', 'trashsystem'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 2000;
@@ -1761,6 +1790,8 @@ SYLoVe('test', async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -1838,6 +1869,8 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
         await S7.sendPhoto(chatId, botConfig.logo, {
             caption: SYLoves,
             parse_mode: 'HTML'
+        }).catch(() => {
+            S7.sendMessage(chatId, SYLoves, { parse_mode: 'HTML' });
         });
 
         const delayMs = 500;
@@ -2280,21 +2313,25 @@ SYLoVe('groupid', async (msg) => {
 // Start SYLove Bot
 const startedTokens = new Set();
 
-if (config.mainToken) {
-    startSYloveBot(config.mainToken);
-    startedTokens.add(config.mainToken);
+// Function to start all bots
+async function initializeAllBots() {
+    if (config.mainToken && !startedTokens.has(config.mainToken)) {
+        startSYloveBot(config.mainToken);
+        startedTokens.add(config.mainToken);
+    }
+
+    const db = getDB();
+    if (db.tokens && db.tokens.length > 0) {
+        db.tokens.forEach(obj => {
+            if (!startedTokens.has(obj.token)) {
+                startSYloveBot(obj.token);
+                startedTokens.add(obj.token);
+            }
+        });
+    } else {
+        log('info', null, 'No extra bots found in database.');
+    }
 }
 
-// Start Extra Bots
-const db = getDB();
-if (db.tokens && db.tokens.length > 0) {
-    db.tokens.forEach(obj => {
-        if (!startedTokens.has(obj.token)) {
-            startSYloveBot(obj.token);
-            startedTokens.add(obj.token);
-        }
-    });
-} else {
-    log('info', null, 'No extra bots found in database.');
-}
+initializeAllBots();
 
