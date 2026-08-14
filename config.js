@@ -1,5 +1,5 @@
 /*
- * © 2026 NAVEED SND (VOIDSEC)
+ * © 2026 SeXyxeon (VOIDSEC)
  *
  * ⚠️ COPYRIGHT NOTICE
  * This source code is protected under copyright law.
@@ -14,21 +14,18 @@
  * with prior permission and proper credit.
  *
  * OFFICIAL LINKS (ONLY):
- * YouTube   : https://youtube.com/
- * Instagram : sabi
- * Telegram  : https://t.me/dark_n_hacker
- * GitHub    : https://github.com/darknhckr
- * WhatsApp  : +923174886361
- *
- * Violations may result in DMCA takedown
- * or termination of the Telegram bot.
+ * YouTube   : https://youtube.com/@voidsec7718
+ * Instagram : sabir._7718
+ * Telegram  : https://t.me/SABIR7718
+ * GitHub    : https://github.com/SABIR7718
+ * WhatsApp  : +91 73650 85213
  */
 module.exports = {
     mainToken: '8855128989:AAGcFSIeQZ8KnfkTRp9asgn2aXSlDTOFrBg', // Bot Token Here 
     
-    S7: '👑↡⏤͟͟͞🦋⃝⃪ ɳαʋҽҽԃ кнαη', // Owner, Name
+    S7: 'https://t.me/dark_n_hacker', // Owner Contact Link
     
-    adminId: '7817582859', // Owner Chat ID ( control /address, /delresell )
+    adminId: '7817582859', // Owner Chat ID
     
     channel: 'https://t.me/darkdhacker', // TG channel link
     
@@ -40,9 +37,9 @@ module.exports = {
     
     instagram: 'https://www.instagram.com/darkdhacker?igsh=eWg2d2p6YjJpZ3Zh', // Instagram Link 
     
-    channelId: '-1003963016482', // channel ID bot must be admin in the channel
+    channelId: '-1003963016482', // channel ID
     
-    groupId: '-1004418227150', // group ID bot must be admin in the group
+    groupId: '-1004418227150', // group ID
     
     bot: '𝙉𝘼𝙑𝙀𝙀𝘿 𝙎𝙉𝘿 𝘽𝙐𝙂 𝘽𝙊𝙏 V1', // Bot name 
     

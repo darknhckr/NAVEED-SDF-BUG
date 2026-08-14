@@ -44,8 +44,8 @@ const {
     fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-let phoneNumber = "918293007159"
-const pairingCode = !!phoneNumber
+let phoneNumber = ""
+const pairingCode = false
 const NodeCache = require("node-cache")
 const { log } = require("@sabir7718/log")
 
@@ -220,11 +220,12 @@ function sendSYLove(bot, chatId) {
     );
 }
 
-function LoveGlobalState(userId) {
+function LoveGlobalState(userId, botOwnerId = null) {
     const db = getDB();
     if (db.state === 0) return true;
     if (
         userId.toString() === config.adminId.toString() ||
+        (botOwnerId && userId.toString() === botOwnerId.toString()) ||
         db.resellers.includes(userId.toString()) ||
         db.premium.includes(userId.toString())
     ) {
@@ -308,13 +309,11 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
         logger: pino({
             level: 'silent'
         }),
-        printQRInTerminal: !pairingCode,
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
+        printQRInTerminal: false,
+        browser: Browsers.ubuntu("Chrome"),
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({
-                level: "fatal"
-            }).child({
                 level: "fatal"
             })),
         },
@@ -322,14 +321,12 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
         generateHighQualityLinkPreview: true,
         syncFullHistory: false,
         getMessage: async (key) => {
-            let jid = jidNormalizedUser(key.remoteJid);
-            let msg = await store.loadMessage(jid, key.id);
-            return msg?.message || "";
+            return "";
         },
         msgRetryCounterCache,
         defaultQueryTimeoutMs: 60000,
         connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 10000,
+        keepAliveIntervalMs: 30000,
     });
 
     if (!SYxS7.authState.creds.registered) {
@@ -338,7 +335,7 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
 
         await delay(1500);
         try {
-            const code = await SYxS7.requestPairingCode(number, `NAVEEDS`);
+            const code = await SYxS7.requestPairingCode(number);
             await S7.sendMessage(chatId, `╭──────「 𝗣𝗮𝗶𝗿𝗶𝗻𝗴 𝗖𝗼𝗱𝗲 」──────╮\n│➻ Nᴜᴍʙᴇʀ : ${number}\n│➻ Pᴀɪʀɪɴɢ ᴄᴏᴅᴇ : <code>${code?.match(/.{1,4}/g)?.join("-") || code}</code>\n╰───────────────────────╯`, {
                 parse_mode: 'HTML'
             });
@@ -591,8 +588,11 @@ function startSYloveBot(token) {
                         [{
                             text: 'I| Channel ↗',
                             url: `${config.channel}`
+                        }],
+                        [{
+                            text: 'I| Group ↗',
+                            url: `${config.group}`
                         }]
-                        //   [{ text: 'I| Group ↗', url: `${config.group}` }]
                     ]
                 }
             };
@@ -899,7 +899,7 @@ function startSYloveBot(token) {
             const userId = msg.from.id.toString();
             const args = msg.text.split(' ');
             const newToken = args[1];
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
             if (!newToken) return S7.sendMessage(chatId, 'Usage: /addtoken <token>');
@@ -939,7 +939,7 @@ function startSYloveBot(token) {
             const userId = msg.from.id.toString();
             const args = msg.text.split(' ');
             const number = args[1];
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
 
@@ -963,7 +963,7 @@ function startSYloveBot(token) {
             const args = msg.text.split(' ');
             const number = args[1];
 
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
 
@@ -999,7 +999,7 @@ function startSYloveBot(token) {
             const userId = msg.from.id.toString();
             const args = msg.text.split(' ');
             const delToken = args[1];
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
 
@@ -1029,7 +1029,7 @@ function startSYloveBot(token) {
 
             let db = getDB();
             const myTokens = db.tokens.filter(t => t.owner === userId);
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
 
@@ -1071,7 +1071,7 @@ function startSYloveBot(token) {
         SYLoVe('addresell', (msg) => {
             const chatId = msg.chat.id.toString();
             const userId = msg.from.id.toString();
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
             if (chatId !== config.adminId) return S7.sendMessage(chatId, notauthorized);
@@ -1090,7 +1090,7 @@ function startSYloveBot(token) {
         SYLoVe('delresell', (msg) => {
             const chatId = msg.chat.id.toString();
             const userId = msg.from.id.toString();
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
                 return sendSYLove(S7, chatId);
             }
             if (chatId !== config.adminId) return S7.sendMessage(chatId, notauthorized);
@@ -1109,7 +1109,7 @@ function startSYloveBot(token) {
         SYLoVe('listresell', async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
     if (chatId !== config.adminId) {
@@ -1146,7 +1146,7 @@ function startSYloveBot(token) {
             let db = getDB();
             const isOwner = chatId === config.adminId;
             const isReseller = db.resellers.includes(chatId);
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
 
@@ -1168,7 +1168,7 @@ function startSYloveBot(token) {
             let db = getDB();
             const isOwner = chatId === config.adminId;
             const isReseller = db.resellers.includes(chatId);
-            if (!LoveGlobalState(userId)) {
+            if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
 
@@ -1192,7 +1192,7 @@ function startSYloveBot(token) {
             
             const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
-            if (!LoveGlobalState(userId)) return sendSYLove(S7, chatId);
+            if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
             if (!waSessions[chatId] || waSessions[chatId].length === 0) {
                 return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
             }
@@ -1244,7 +1244,7 @@ SYLoVe(['xgroup', 'groupui'], async (msg) => {
         const targetNum = args[1];
         const durationArg = args[2];
 
-        if (!LoveGlobalState(userId)) {
+        if (!LoveGlobalState(userId, botOwnerId)) {
             return sendSYLove(S7, chatId);
         }
 
@@ -1332,7 +1332,7 @@ SYLoVe(['trashsysgp'], async (msg) => {
         const targetNum = args[1];
         const durationArg = args[2];
 
-        if (!LoveGlobalState(userId)) {
+        if (!LoveGlobalState(userId, botOwnerId)) {
             return sendSYLove(S7, chatId);
         }
 
@@ -1421,7 +1421,7 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
         const targetNum = args[1];
         const durationArg = args[2];
 
-        if (!LoveGlobalState(userId)) {
+        if (!LoveGlobalState(userId, botOwnerId)) {
             return sendSYLove(S7, chatId);
         }
 
@@ -1505,7 +1505,7 @@ SYLoVe(['crashdroid', 'killsystem'], async (msg) => {
 
     const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
-    if (!LoveGlobalState(userId)) return sendSYLove(S7, chatId);
+    if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
     if (!waSessions[chatId] || waSessions[chatId].length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
@@ -1600,7 +1600,7 @@ SYLoVe(['crashjam', 'trashsystem'], async (msg) => {
 
     const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
-    if (!LoveGlobalState(userId)) return sendSYLove(S7, chatId);
+    if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
     if (!waSessions[chatId] || waSessions[chatId].length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
@@ -1693,7 +1693,7 @@ SYLoVe('test', async (msg) => {
 
     const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
-    if (!LoveGlobalState(userId)) return sendSYLove(S7, chatId);
+    if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
     if (!waSessions[chatId] || waSessions[chatId].length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
@@ -1770,7 +1770,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
 
     const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
-    if (!LoveGlobalState(userId)) return sendSYLove(S7, chatId);
+    if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
     if (!waSessions[chatId] || waSessions[chatId].length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
@@ -1902,7 +1902,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
         SYLoVe('listprem', async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
     if (chatId !== config.adminId) {
@@ -1916,8 +1916,8 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
 
     let SY_BE_MY_LOVE_YOUR_SABIR7718 = 'Premium List:\n\n';
 
-    for (let i = 0; i < db.resellers.length; i++) {
-        const id = db.resellers[i].toString();
+    for (let i = 0; i < db.premium.length; i++) {
+        const id = db.premium[i].toString();
         try {
             const user = await S7.getChat(id);
             const username = user.username ? `@${user.username} : ` : '';
@@ -1936,7 +1936,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
 
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
     }
 
@@ -2002,7 +2002,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
     const userId = msg.from.id.toString();
     const args = msg.text.split(' ');
     const value = args[1];
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
 
@@ -2031,7 +2031,7 @@ SYLoVe('groupid', async (msg) => {
     const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
 
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
     }
 
@@ -2089,7 +2089,7 @@ SYLoVe('groupid', async (msg) => {
         SYLoVe('listuser', (msg) => {
         const chatId = msg.chat.id.toString();
     const userId = msg.from.id.toString();
-    if (!LoveGlobalState(userId)) {
+    if (!LoveGlobalState(userId, botOwnerId)) {
         return sendSYLove(S7, chatId);
         }
             if (msg.chat.id.toString() !== config.adminId) {
@@ -2147,14 +2147,31 @@ SYLoVe('groupid', async (msg) => {
             };
 
 
-            if (data === 'misc_menu') {
-            const chatId = query.message.chat.id;
-            const userId = query.from.id.toString();
-            if (!LoveGlobalState(userId)) {
-             return sendSYLove(S7, chatId);
+            if (data === 'main_menu') {
+                const chatId = query.message.chat.id;
+                const userId = query.from.id.toString();
+                const mainText = MainSYLoVe(name, uptime, userId, botConfig.botName, botConfig.ownerContact) + `\n\nWelcome to the Main Menu!`;
+                S7edit(mainText, { chat_id: chatId, message_id: messageId, ...SABIR7718 });
+            }
+
+            const BackKeyboard = {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{
+                            text: '⬅️ Back to Main Menu',
+                            callback_data: 'main_menu'
+                        }]
+                    ]
                 }
-                const love = query.from.id.toString();
-                const miscText = MainSYLoVe(name, uptime, love, botConfig.botName, botConfig.ownerContact) + `
+            };
+
+            if (data === 'misc_menu') {
+                const chatId = query.message.chat.id;
+                const userId = query.from.id.toString();
+                if (!LoveGlobalState(userId, botOwnerId)) {
+                    return sendSYLove(S7, chatId);
+                }
+                const miscText = MainSYLoVe(name, uptime, userId, botConfig.botName, botConfig.ownerContact) + `
 ┌──────┤ Misc Menu ├──────┐
 │➻ reqpair number
 │➻ delpair number
@@ -2176,17 +2193,16 @@ SYLoVe('groupid', async (msg) => {
 │➻ /setbot  – Customize / configure your bot
 └────────────────────────┘
                 `;
-                S7edit(miscText, { chat_id: chatId, message_id: messageId, ...SABIR7718 });
+                S7edit(miscText, { chat_id: chatId, message_id: messageId, ...BackKeyboard });
             }
 
             if (data === 'bug_menu') {
-            const chatId = query.message.chat.id;
-            const userId = query.from.id.toString();
-            if (!LoveGlobalState(userId)) {
-             return sendSYLove(S7, chatId);
+                const chatId = query.message.chat.id;
+                const userId = query.from.id.toString();
+                if (!LoveGlobalState(userId, botOwnerId)) {
+                    return sendSYLove(S7, chatId);
                 }
-                const love = query.from.id.toString();
-                const bugText = MainSYLoVe(name, uptime, love, botConfig.botName, botConfig.ownerContact) + `
+                const bugText = MainSYLoVe(name, uptime, userId, botConfig.botName, botConfig.ownerContact) + `
 ┌──────┤ Bug Android ├──────┐
 │➻ crashjam num time
 │➻ trashsystem num time
@@ -2208,8 +2224,8 @@ SYLoVe('groupid', async (msg) => {
 │➻ groupid link
 └──────────────────────┘
                 `;
-                S7edit(bugText, { chat_id: chatId, message_id: messageId, ...SABIR7718 });
-                }
+                S7edit(bugText, { chat_id: chatId, message_id: messageId, ...BackKeyboard });
+            }
                 
              if (data.startsWith('copy_jid_')) {
         const jid = data.replace('copy_jid_', '');
