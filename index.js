@@ -520,10 +520,15 @@ function BvgSYLoVe(cleanTarget) {
 }
 
 function startSYloveBot(token) {
+    if (activeBots[token]) {
+        log('warn', 'SYSTEM', `Bot instance for token ${token.substring(0, 10)}... is already running. Skipping.`);
+        return;
+    }
     try {
         const S7 = new SY(token, {
             polling: true
         });
+        activeBots[token] = S7;
         let db = getDB();
         let tokenData = db.tokens.find(t => t.token === token);
         let SABIR7718;
@@ -552,7 +557,6 @@ function startSYloveBot(token) {
 
         const botOwnerId = tokenData ? tokenData.owner : config.adminId;
         S7.getMe().then((botInfo) => {
-            activeBots[token] = S7;
             log('success', null, `Bot Started: ${botInfo.first_name} (@${botInfo.username})`);
             if (token === config.mainToken) {
                 log('info', 'SYSTEM', 'Checking for saved WhatsApp sessions...');
@@ -650,40 +654,47 @@ function startSYloveBot(token) {
             };
         }
 
+        const commandHandlers = new Map();
+
         function SYLoVe(commands, callback) {
             if (!Array.isArray(commands)) commands = [commands];
-
-            S7.on('message', async (msg) => {
-                if (!msg.text) return;
-                const cmd = msg.text.trim().split(' ')[0].slice(1);
-
-                if (commands.includes(cmd)) {
-                    const chatId = msg.chat.id;
-                    const userId = msg.from.id;
-
-                    if (botConfig.protection && cmd !== 'checkmembership') {
-                        const isMember = await CheckSYlovesToo(S7, userId, botConfig.channelId, botConfig.groupId, botOwnerId);
-
-                        if (!isMember) {
-                            const protectMsg = `❌ <b>Access Denied!</b>\n\nYou must join our Channel & Group to use this bot.\n\n👤 <b>Owner:</b> ${botConfig.ownerContact}\nClick "Check Membership" after joining.`;
-
-                            return S7.sendMessage(chatId, protectMsg, {
-                                parse_mode: 'HTML',
-                                ...VOIDSEC()
-                            });
-                        }
-                    }
-
-                    try {
-                        const name = msg.from.first_name || "Unknown";
-                        log('command', name, msg.text);
-                        callback(msg);
-                    } catch (err) {
-                        log('error', 'COMMAND_EXEC', err.message);
-                    }
-                }
+            commands.forEach(cmd => {
+                commandHandlers.set(cmd.toLowerCase(), callback);
             });
         }
+
+        S7.on('message', async (msg) => {
+            if (!msg.text || !msg.text.startsWith('/')) return;
+            
+            const fullCmd = msg.text.trim().split(' ')[0].slice(1).toLowerCase();
+            const callback = commandHandlers.get(fullCmd);
+            
+            if (callback) {
+                const chatId = msg.chat.id;
+                const userId = msg.from.id;
+
+                if (botConfig.protection && fullCmd !== 'checkmembership') {
+                    const isMember = await CheckSYlovesToo(S7, userId, botConfig.channelId, botConfig.groupId, botOwnerId);
+
+                    if (!isMember) {
+                        const protectMsg = `❌ <b>Access Denied!</b>\n\nYou must join our Channel & Group to use this bot.\n\n👤 <b>Owner:</b> ${botConfig.ownerContact}\nClick "Check Membership" after joining.`;
+
+                        return S7.sendMessage(chatId, protectMsg, {
+                            parse_mode: 'HTML',
+                            ...VOIDSEC()
+                        });
+                    }
+                }
+
+                try {
+                    const name = msg.from.first_name || "Unknown";
+                    log('command', name, msg.text);
+                    callback(msg);
+                } catch (err) {
+                    log('error', 'COMMAND_EXEC', err.message);
+                }
+            }
+        });
 
 
         SYLoVe(['start', 'menu'], (msg) => {
@@ -2267,14 +2278,22 @@ SYLoVe('groupid', async (msg) => {
 }
 
 // Start SYLove Bot
-startSYloveBot(config.mainToken);
+const startedTokens = new Set();
+
+if (config.mainToken) {
+    startSYloveBot(config.mainToken);
+    startedTokens.add(config.mainToken);
+}
 
 // Start Extra Bots
 const db = getDB();
 if (db.tokens && db.tokens.length > 0) {
     db.tokens.forEach(obj => {
-    startSYloveBot(obj.token);
-});
+        if (!startedTokens.has(obj.token)) {
+            startSYloveBot(obj.token);
+            startedTokens.add(obj.token);
+        }
+    });
 } else {
     log('info', null, 'No extra bots found in database.');
 }
