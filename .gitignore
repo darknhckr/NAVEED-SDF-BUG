@@ -3,3 +3,4 @@ node_modules/
 Auths/
 Love/*/Auths/
 *.log
+bot.lock
