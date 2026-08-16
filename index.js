@@ -24,6 +24,26 @@
 
 
 process.env.NTBA_FIX_350 = 1;
+
+// --- PREVENT DUPLICATE INSTANCES ---
+const fs = require('fs');
+const path = require('path');
+const lockFile = path.join(__dirname, 'bot.lock');
+
+if (fs.existsSync(lockFile)) {
+    const pid = fs.readFileSync(lockFile, 'utf8');
+    try {
+        process.kill(pid, 0);
+        console.log(`[SYSTEM] Bot is already running with PID ${pid}. Exiting.`);
+        process.exit(0);
+    } catch (e) {
+        // PID doesn't exist, remove stale lock
+        fs.unlinkSync(lockFile);
+    }
+}
+fs.writeFileSync(lockFile, process.pid.toString());
+process.on('exit', () => { if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile); });
+
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -374,10 +394,13 @@ async function StartLovingSY(chatId, number, S7, isreconnect = false, ownerId = 
             } catch (e) {}
             if (sessionsMap) {
                 if (!sessionsMap.has(chatId)) sessionsMap.set(chatId, []);
-                sessionsMap.get(chatId).push({
+                // Dedup: Remove old session with same number
+                const existing = sessionsMap.get(chatId).filter(s => s.num !== number);
+                existing.push({
                     sock: SYxS7,
                     num: number
                 });
+                sessionsMap.set(chatId, existing);
             }
             // Always send connection message, but handle potential errors
             await delay(1000);
@@ -819,6 +842,7 @@ function startSYloveBot(token) {
             if (activeBots[token]) {
                 try {
                     await activeBots[token].stopPolling();
+                    delete activeBots[token]; // Must delete before starting again
                 } catch (e) {
                     console.log('Error stopping polling during restart:', e.message);
                 }
@@ -1033,7 +1057,15 @@ function startSYloveBot(token) {
 
             if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
 
-            const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+            let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+            if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) {
+                for (const [key, sessList] of sessionsMap.entries()) {
+                    if (sessList && sessList.length > 0) {
+                        sessions = sessList;
+                        break;
+                    }
+                }
+            }
             if (sessions.length === 0) {
                 return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
             }
@@ -1292,7 +1324,15 @@ function startSYloveBot(token) {
             const s7CM = args[0].replace('/', '/').replace('.', ''); 
 
             if (!LoveGlobalState(userId, botOwnerId)) return sendSYLove(S7, chatId);
-            const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+            let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+            if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) {
+                for (const [key, sessList] of sessionsMap.entries()) {
+                    if (sessList && sessList.length > 0) {
+                        sessions = sessList;
+                        break;
+                    }
+                }
+            }
             if (sessions.length === 0) {
                 return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
             }
@@ -1369,7 +1409,7 @@ SYLoVe(['xgroup', 'groupui', 'xgp', 'gpui'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+        let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
         if (sessions.length === 0) {
             return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
         }
@@ -1456,7 +1496,7 @@ SYLoVe(['trashsysgp'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+        let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
         if (sessions.length === 0) {
             return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
         }
@@ -1544,7 +1584,7 @@ SYLoVe(['killgc', 'groupfriz'], async (msg) => {
             return S7.sendMessage(chatId, '❌ Invalid time value');
         }
 
-        const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+        let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
         if (sessions.length === 0) {
             return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
         }
@@ -1614,7 +1654,7 @@ SYLoVe(['crashdroid', 'killsystem', 'crashdr', 'killsys'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
     if (sessions.length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
     }
@@ -1711,7 +1751,7 @@ SYLoVe(['crashjam', 'trashsystem', 'crashjima', 'trashsys'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
     if (sessions.length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
     }
@@ -1806,7 +1846,7 @@ SYLoVe('test', async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
     if (sessions.length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
     }
@@ -1885,7 +1925,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
     const cleanTarget = args[1].replace(/[^0-9]/g, '');
     const targetJid = `${cleanTarget}@s.whatsapp.net`;
 
-    const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
     if (sessions.length === 0) {
         return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
     }
@@ -2045,7 +2085,7 @@ SYLoVe(['IosInvisible', 'hidenseek'], async (msg) => {
         return sendSYLove(S7, chatId);
     }
 
-    const sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || []; if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) { for (const [key, sessList] of sessionsMap.entries()) { if (sessList && sessList.length > 0) { sessions = sessList; break; } } }
     if (sessions.length === 0) {
         return S7.sendMessage(chatId, '❌ You have no connected WhatsApp numbers.\nUse /reqpair to connect one first.');
     }
@@ -2156,6 +2196,19 @@ SYLoVe('groupid', async (msg) => {
         return S7.sendMessage(chatId, 'Link format wrong.');
     }
 
+    let sessions = sessionsMap.get(chatId) || sessionsMap.get(userId) || [];
+    if (sessions.length === 0 && LoveGlobalState(userId, botOwnerId)) {
+        for (const [key, sessList] of sessionsMap.entries()) {
+            if (sessList && sessList.length > 0) {
+                sessions = sessList;
+                break;
+            }
+        }
+    }
+    if (sessions.length === 0) {
+        return S7.sendMessage(chatId, '❌ No Number connected please use /reqpair to connect');
+    }
+    const client = sessions[0].sock;
     try {
         const result = await client.groupAcceptInvite(inviteCode);
         if (!result?.gid) {
